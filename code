@@ -1,0 +1,188 @@
+import random
+import time
+
+class TrieNode:
+    def __init__(self):
+        self.children = {}
+        self.is_end = False
+
+class IPTrie:
+    def __init__(self):
+        self.root = TrieNode()
+        self.size = 0
+
+    def _ip_to_bin(self, ip_str):
+        return ''.join(f'{int(octet):08b}' for octet in ip_str.split('.'))
+
+    def insert(self, ip_str):
+        node = self.root
+        ip_bin = self._ip_to_bin(ip_str)
+        for bit in ip_bin:
+            if bit not in node.children:
+                node.children[bit] = TrieNode()
+            node = node.children[bit]
+        if not node.is_end:
+            node.is_end = True
+            self.size += 1
+
+    def search_prefix(self, ip_str):
+        node = self.root
+        ip_bin = self._ip_to_bin(ip_str)
+        for bit in ip_bin:
+            if bit in node.children:
+                node = node.children[bit]
+                if node.is_end:
+                    return True
+            else:
+                break
+        return False
+
+    def delete(self, ip_str):
+        def _delete(node, ip_bin, depth):
+            if depth == len(ip_bin):
+                if not node.is_end:
+                    return False
+                node.is_end = False
+                return len(node.children) == 0
+            bit = ip_bin[depth]
+            if bit not in node.children:
+                return False
+            should_delete_child = _delete(node.children[bit], ip_bin, depth + 1)
+            if should_delete_child:
+                del node.children[bit]
+                return not node.is_end and len(node.children) == 0
+            return False
+
+        ip_bin = self._ip_to_bin(ip_str)
+        if _delete(self.root, ip_bin, 0):
+            self.size -= 1
+
+class IPList:
+    def __init__(self):
+        self.ips = []
+        self.size = 0
+
+    def insert(self, ip_str):
+        self.ips.append(ip_str)
+        self.size += 1
+
+    def search_prefix(self, ip_str):
+        for stored_ip in self.ips:
+            if ip_str.startswith(stored_ip.split('.')[0]):
+                return True
+        return False
+
+    def delete(self, ip_str):
+        try:
+            self.ips.remove(ip_str)
+            self.size -= 1
+        except ValueError:
+            pass
+
+def generate_random_ip():
+    return ".".join(str(random.randint(0, 255)) for _ in range(4))
+
+def calculate_performance_gain(trie_time, list_time):
+    if trie_time == 0:
+        return "N/A"
+    gain = ((list_time - trie_time) / trie_time) * 100
+    return f"{gain:.2f}%"
+
+def print_performance_table(num_ips, trie_insert, list_insert,
+                            trie_search, list_search,
+                            trie_delete, list_delete):
+    print("\n" + "=" * 55)
+    print("              📊 PERFORMANCE COMPARISON 📊")
+    print("=" * 55)
+    print(f"Routing Table size: {num_ips} IPs")
+    print(f"Number of lookups: {num_ips}\n")
+    header = f"{'Operation':<20}{'Trie (ms)':<15}{'List (ms)':<15}"
+    print(header)
+    print("-" * len(header))
+    print(f"{'Insertion':<20}{trie_insert*1000:<15.2f}{list_insert*1000:<15.2f}")
+    print(f"{'Search':<20}{trie_search*1000:<15.2f}{list_search*1000:<15.2f}")
+    print(f"{'Delete':<20}{trie_delete*1000:<15.2f}{list_delete*1000:<15.2f}")
+    print("-" * len(header))
+    print(f"{'Avg Lookup Time':<20}"
+          f"{(trie_search/num_ips)*1e6:<15.2f}µs"
+          f"{(list_search/num_ips)*1e6:<15.2f}µs")
+    lookup_gain = calculate_performance_gain(trie_search, list_search)
+    print("=" * 55)
+    print(f"⚡ Performance Gain (Trie vs List): {lookup_gain} faster lookups")
+    print("=" * 55 + "\n")
+
+if __name__ == "__main__":
+    NUM_IPS = 50
+    IPS_TO_DELETE = 5
+
+    print("Initializing Router simulator...")
+    print(f"- Loaded {NUM_IPS} routes.\n")
+
+    random_ips = [generate_random_ip() for _ in range(NUM_IPS)]
+    ips_to_delete = random.sample(random_ips, IPS_TO_DELETE)
+
+    trie = IPTrie()
+    for ip in random_ips:
+        trie.insert(ip)
+    pre_delete_trie = {ip: trie.search_prefix(ip) for ip in ips_to_delete}
+    for ip in ips_to_delete:
+        trie.delete(ip)
+    post_delete_trie = {ip: trie.search_prefix(ip) for ip in ips_to_delete}
+
+    ip_list = IPList()
+    for ip in random_ips:
+        ip_list.insert(ip)
+    pre_delete_list = {ip: ip_list.search_prefix(ip) for ip in ips_to_delete}
+    for ip in ips_to_delete:
+        ip_list.delete(ip)
+    post_delete_list = {ip: ip_list.search_prefix(ip) for ip in ips_to_delete}
+
+    start = time.time()
+    for ip in random_ips:
+        trie.insert(ip)
+    trie_insert_time = time.time() - start
+
+    start = time.time()
+    for ip in random_ips:
+        trie.search_prefix(ip)
+    trie_search_time = time.time() - start
+
+    start = time.time()
+    for ip in ips_to_delete:
+        trie.delete(ip)
+    trie_delete_time = time.time() - start
+
+    start = time.time()
+    for ip in random_ips:
+        ip_list.insert(ip)
+    list_insert_time = time.time() - start
+
+    start = time.time()
+    for ip in random_ips:
+        ip_list.search_prefix(ip)
+    list_search_time = time.time() - start
+
+    start = time.time()
+    for ip in ips_to_delete:
+        ip_list.delete(ip)
+    list_delete_time = time.time() - start
+
+    print("Inserted IPs:")
+    print(random_ips)
+    print("\n🗑️ IPs selected for deletion:")
+    print(ips_to_delete)
+
+    print("\n🔍 Pre-Deletion Search Results")
+    print(f"{'IP Address':<20}{'Trie Found?':<15}{'List Found?':<15}")
+    for ip in ips_to_delete:
+        print(f"{ip:<20}{str(pre_delete_trie[ip]):<15}{str(pre_delete_list[ip]):<15}")
+
+    print("\n🔍 Post-Deletion Search Results")
+    print(f"{'IP Address':<20}{'Trie Found?':<15}{'List Found?':<15}")
+    for ip in ips_to_delete:
+        print(f"{ip:<20}{str(post_delete_trie[ip]):<15}{str(post_delete_list[ip]):<15}")
+
+    print_performance_table(NUM_IPS,
+                            trie_insert_time, list_insert_time,
+                            trie_search_time, list_search_time,
+                            trie_delete_time, list_delete_time)
